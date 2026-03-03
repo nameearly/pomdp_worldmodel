@@ -114,7 +114,17 @@ class SyntheticPOMDP:
             belief = b_new / norm if norm > 0 else self.initial_belief.copy()
 
         # P(o | h, a) = (belief * T_a) * E_a
-        return (belief @ self.T[action]) @ self.E[action]
+        # Note (numerical stability): in exact arithmetic this is a probability distribution over observations
+        # (i.e., it sums to 1). In practice, tiny floating-point drift in T/E normalization can make the sum
+        # deviate slightly from 1; renormalize/clip downstream if you rely on strict normalization.
+        kernel = (belief @ self.T[action]) @ self.E[action]
+        kernel = np.clip(kernel, 0.0, None)
+        s = kernel.sum()
+        if s > 0:
+            kernel = kernel / s
+        else:
+            kernel = np.full(self.O, 1.0 / self.O)
+        return kernel
 
 
     def compute_belief(self, history: List[Tuple[int, int]]) -> np.ndarray:
